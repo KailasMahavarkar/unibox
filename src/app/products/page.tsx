@@ -161,7 +161,7 @@ export default function ProductsPage() {
     setError(null)
 
     try {
-      // Call the real AWS PFM API
+      // Call the real AWS PFM API with session management
       const botResponse = await chatbotService.sendMessage(inputValue)
       
       const response = {

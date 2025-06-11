@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { MessageCircle, X, Send, AlertCircle } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -19,6 +19,15 @@ export default function ChatBot() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Initialize session when component opens for the first time
+  useEffect(() => {
+    if (isOpen) {
+      // Ensure we have an active session when opening
+      const session = chatbotService.getCurrentSession();
+      console.log('ChatBot session initialized:', session?.session_id);
+    }
+  }, [isOpen]);
+
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isLoading) return
 
@@ -34,7 +43,7 @@ export default function ChatBot() {
     setError(null)
 
     try {
-      // Call the real AWS PFM API
+      // Call the real AWS PFM API with session management
       const botResponse = await chatbotService.sendMessage(inputValue)
       
       const response = {

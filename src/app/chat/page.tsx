@@ -1,12 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ArrowLeft, Send, Sparkles, Copy, Download, AlertCircle } from "lucide-react"
+import { ArrowLeft, Send, Sparkles, Copy, Download, AlertCircle, RefreshCw } from "lucide-react"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
 import { chatbotService } from "@/services/api/chatbot-service"
+import { Badge } from "@/components/ui/badge"
 
 export default function ChatPage() {
   const [messages, setMessages] = useState([
@@ -20,7 +21,52 @@ export default function ChatPage() {
   const [inputValue, setInputValue] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [sessionId, setSessionId] = useState<string | null>(null)
   const { toast } = useToast()
+
+  // Update session ID on component mount and when session changes
+  useEffect(() => {
+    const updateSessionId = () => {
+      try {
+        const session = chatbotService.getSessionInfo();
+        setSessionId(session?.session_id || null);
+      } catch (error) {
+        console.warn('Failed to get session info:', error);
+        setSessionId(null);
+      }
+    };
+
+    updateSessionId();
+    // Update session ID periodically
+    const interval = setInterval(updateSessionId, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const startNewSession = () => {
+    try {
+      const newSession = chatbotService.startNewSession();
+      setSessionId(newSession.session_id);
+      setMessages([
+        {
+          id: 1,
+          text: "New session started! Hello! I'm your AI assistant for Setu's PFM API Suite. I have comprehensive knowledge of all APIs and can help with integration details, authentication flows, and technical implementation. What would you like to know?",
+          isBot: true,
+          timestamp: new Date(),
+        },
+      ]);
+      toast({
+        title: "New Session Started",
+        description: `Session ${newSession.session_id.split('_')[1]} created successfully`,
+      });
+    } catch (error) {
+      console.error('Failed to start new session:', error);
+      toast({
+        title: "Error",
+        description: "Failed to start new session",
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isLoading) return
@@ -38,8 +84,14 @@ export default function ChatPage() {
     setError(null)
 
     try {
-      // Call the real AWS PFM API
+      // Call the real AWS PFM API with session management
       const botResponse = await chatbotService.sendMessage(inputValue)
+      
+      // Update session ID after successful message
+      const session = chatbotService.getSessionInfo();
+      if (session) {
+        setSessionId(session.session_id);
+      }
       
       const response = {
         id: messages.length + 2,
@@ -109,15 +161,33 @@ export default function ChatPage() {
               </div>
               <div>
                 <h1 className="text-xl font-semibold text-gray-900">PFM API Assistant</h1>
-                <p className="text-sm text-gray-500">Expert knowledge powered by AWS</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm text-gray-500">Expert knowledge powered by AWS</p>
+                  {sessionId && (
+                    <Badge variant="outline" className="text-xs">
+                      Session: {sessionId.split('_')[1]}
+                    </Badge>
+                  )}
+                </div>
               </div>
             </div>
           </div>
 
-          <Button onClick={exportChat} variant="outline" className="flex items-center gap-2">
-            <Download className="h-4 w-4" />
-            Export Chat
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              onClick={startNewSession} 
+              variant="outline" 
+              size="sm"
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className="h-4 w-4" />
+              New Session
+            </Button>
+            <Button onClick={exportChat} variant="outline" className="flex items-center gap-2">
+              <Download className="h-4 w-4" />
+              Export Chat
+            </Button>
+          </div>
         </div>
       </header>
 

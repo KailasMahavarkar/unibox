@@ -1,146 +1,321 @@
 import axios, { AxiosResponse, AxiosError } from 'axios';
-import { ChatbotApiRequest, ChatbotApiResponse, ChatbotServiceError } from '@/types/chatbot';
+import { ChatbotApiRequest, ChatbotApiResponse, ChatbotServiceError, ChatSession } from '@/types/chatbot';
 
 class ChatbotService {
-  private readonly apiUrl = 'https://7hn0iksiy0.execute-api.ap-south-1.amazonaws.com/prod/chat';
-  private readonly timeout = 30000; // 30 seconds timeout
-  private readonly maxRetries = 3;
+    private readonly apiUrl = 'https://7hn0iksiy0.execute-api.ap-south-1.amazonaws.com/prod/chat';
+    private readonly timeout = 30000; // 30 seconds timeout
+    private readonly maxRetries = 3;
+    private currentSession: ChatSession | null = null;
+    private hasPreviousSessionId: boolean = false;
+    // Session management constants
+    private readonly SESSION_STORAGE_KEY = 'setu_chatbot_session';
+    private readonly SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
 
-  /**
-   * Send a message to the AWS PFM chatbot API
-   */
-  async sendMessage(message: string): Promise<string> {
-    if (!message.trim()) {
-      throw new Error('Message cannot be empty');
+    constructor() {
+        // Try to restore session from localStorage on initialization
+        this.restoreSession();
+        this.hasPreviousSessionId = false;
     }
 
-    const requestPayload: ChatbotApiRequest = {
-      message: message.trim()
-    };
+    /**
+     * Generate a new session ID
+     */
+    private generateSessionId(): string {
+        return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
 
-    let lastError: Error;
-    
-    // Retry mechanism
-    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
-      try {
-        const response: AxiosResponse<ChatbotApiResponse> = await axios.post(
-          this.apiUrl,
-          requestPayload,
-          {
-            timeout: this.timeout,
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            // Disable axios default request transformation to ensure clean JSON
-            transformRequest: [(data) => JSON.stringify(data)],
-          }
-        );
+    /**
+     * Create a new session
+     */
+    private createNewSession(): ChatSession {
+        const session: ChatSession = {
+            session_id: this.generateSessionId(),
+            created_at: new Date(),
+            last_activity: new Date(),
+            is_active: true
+        };
 
-        // Handle successful response
-        if (response.status === 200 && response.data) {
-          // Handle different response formats from the API
-          if (typeof response.data === 'string') {
-            return response.data;
-          }
-          
-          if (response.data.response) {
-            return response.data.response;
-          }
-          
-          // Fallback for unexpected response format
-          return JSON.stringify(response.data);
+        this.currentSession = session;
+        this.saveSession();
+        return session;
+    }
+
+    /**
+     * Save session to localStorage
+     */
+    private saveSession(): void {
+        if (this.currentSession && typeof window !== 'undefined') {
+            try {
+                localStorage.setItem(this.SESSION_STORAGE_KEY, JSON.stringify({
+                    ...this.currentSession,
+                    created_at: this.currentSession.created_at.toISOString(),
+                    last_activity: this.currentSession.last_activity.toISOString()
+                }));
+            } catch (error) {
+                console.warn('Failed to save session to localStorage:', error);
+            }
+        }
+    }
+
+    /**
+     * Restore session from localStorage
+     */
+    private restoreSession(): void {
+        if (typeof window !== 'undefined') {
+            try {
+                const savedSession = localStorage.getItem(this.SESSION_STORAGE_KEY);
+                if (savedSession) {
+                    const parsed = JSON.parse(savedSession);
+                    const session: ChatSession = {
+                        ...parsed,
+                        created_at: new Date(parsed.created_at),
+                        last_activity: new Date(parsed.last_activity)
+                    };
+
+                    // Check if session is still valid
+                    if (this.isSessionValid(session)) {
+                        this.currentSession = session;
+                    } else {
+                        this.clearSession();
+                    }
+                }
+            } catch (error) {
+                console.warn('Failed to restore session from localStorage:', error);
+                this.clearSession();
+            }
+        }
+    }
+
+    /**
+     * Check if session is still valid
+     */
+    private isSessionValid(session: ChatSession): boolean {
+        const now = new Date();
+        const timeDiff = now.getTime() - session.last_activity.getTime();
+        return session.is_active && timeDiff < this.SESSION_TIMEOUT;
+    }
+
+    /**
+     * Update session activity
+     */
+    private updateSessionActivity(): void {
+        if (this.currentSession) {
+            this.currentSession.last_activity = new Date();
+            this.saveSession();
+        }
+    }
+
+    /**
+     * Clear current session
+     */
+    private clearSession(): void {
+        this.currentSession = null;
+        if (typeof window !== 'undefined') {
+            localStorage.removeItem(this.SESSION_STORAGE_KEY);
+        }
+    }
+
+    /**
+     * Get current session, create new one if needed
+     */
+    public getCurrentSession(): ChatSession {
+        if (!this.currentSession || !this.isSessionValid(this.currentSession)) {
+            this.createNewSession();
+        }
+        return this.currentSession!;
+    }
+
+    /**
+     * Start a new session explicitly
+     */
+    public startNewSession(): ChatSession {
+        this.clearSession();
+        return this.createNewSession();
+    }
+
+    /**
+     * Get session ID for current session
+     */
+    public getSessionId(): string {
+        return this.getCurrentSession().session_id;
+    }
+
+    /**
+     * Send a message to the AWS PFM chatbot API with session management
+     */
+    async sendMessage(message: string, forceNewSession = false): Promise<string> {
+        if (!message.trim()) {
+            throw new Error('Message cannot be empty');
         }
 
-        throw new Error(`Unexpected response status: ${response.status}`);
-        
-      } catch (error) {
-        lastError = this.handleError(error, attempt);
-        
-        // If it's the last attempt, throw the error
-        if (attempt === this.maxRetries) {
-          throw lastError;
+        // Create new session if forced or if first message
+        if (forceNewSession) {
+            this.startNewSession();
         }
-        
-        // Wait before retry (exponential backoff)
-        await this.delay(Math.pow(2, attempt) * 1000);
-      }
-    }
 
-    throw lastError!;
-  }
+        const session = this.getCurrentSession();
+        const requestPayload: ChatbotApiRequest = {
+            message: message.trim(),
+            ...(this.hasPreviousSessionId && { session_id: session.session_id })
+        };
 
-  /**
-   * Handle and format errors from the API
-   */
-  private handleError(error: unknown, attempt: number): Error {
-    if (axios.isAxiosError(error)) {
-      const axiosError = error as AxiosError;
-      
-      // Network errors
-      if (axiosError.code === 'ECONNABORTED' || axiosError.code === 'ETIMEDOUT') {
-        return new Error(`Request timeout (attempt ${attempt}/${this.maxRetries}). Please try again.`);
-      }
-      
-      if (axiosError.code === 'ERR_NETWORK') {
-        return new Error(`Network error (attempt ${attempt}/${this.maxRetries}). Please check your connection.`);
-      }
-      
-      // HTTP errors
-      if (axiosError.response) {
-        const status = axiosError.response.status;
-        const statusText = axiosError.response.statusText;
-        
-        switch (status) {
-          case 400:
-            return new Error('Invalid request format. Please try rephrasing your message.');
-          case 401:
-            return new Error('Authentication failed. Please refresh the page and try again.');
-          case 403:
-            return new Error('Access denied. You may not have permission to use this service.');
-          case 404:
-            return new Error('Service not found. The chatbot API may be temporarily unavailable.');
-          case 429:
-            return new Error('Too many requests. Please wait a moment before trying again.');
-          case 500:
-            return new Error('Server error. The chatbot service is temporarily unavailable.');
-          case 502:
-          case 503:
-          case 504:
-            return new Error('Service temporarily unavailable. Please try again in a moment.');
-          default:
-            return new Error(`API error ${status}: ${statusText} (attempt ${attempt}/${this.maxRetries})`);
+        this.hasPreviousSessionId = true;
+        let lastError: Error;
+
+        // Retry mechanism
+        for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+            try {
+                const response: AxiosResponse<ChatbotApiResponse> = await axios.post(
+                    this.apiUrl,
+                    requestPayload,
+                    {
+                        timeout: this.timeout,
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        // Disable axios default request transformation to ensure clean JSON
+                        transformRequest: [(data) => JSON.stringify(data)],
+                    }
+                );
+
+                // Handle successful response
+                if (response.status === 200 && response.data) {
+                    // Update session activity on successful response
+                    this.updateSessionActivity();
+
+                    // Update session_id if provided in response
+                    if (response.data.session_id && response.data.session_id !== session.session_id) {
+                        this.currentSession!.session_id = response.data.session_id;
+                        this.saveSession();
+                    }
+
+                    // Handle different response formats from the API
+                    if (typeof response.data === 'string') {
+                        return response.data;
+                    }
+
+                    if (response.data.response) {
+                        return response.data.response;
+                    }
+
+                    // Fallback for unexpected response format
+                    return JSON.stringify(response.data);
+                }
+
+                throw new Error(`Unexpected response status: ${response.status}`);
+
+            } catch (error) {
+                lastError = this.handleError(error, attempt);
+
+                // If it's the last attempt, throw the error
+                if (attempt === this.maxRetries) {
+                    throw lastError;
+                }
+
+                // Wait before retry (exponential backoff)
+                await this.delay(Math.pow(2, attempt) * 1000);
+            }
         }
-      }
-    }
-    
-    // Generic error handling
-    if (error instanceof Error) {
-      return new Error(`${error.message} (attempt ${attempt}/${this.maxRetries})`);
-    }
-    
-    return new Error(`Unknown error occurred (attempt ${attempt}/${this.maxRetries})`);
-  }
 
-  /**
-   * Delay utility for retry mechanism
-   */
-  private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  /**
-   * Health check for the API
-   */
-  async healthCheck(): Promise<boolean> {
-    try {
-      const response = await axios.get(`${this.apiUrl.replace('/chat', '/health')}`, {
-        timeout: 5000
-      });
-      return response.status === 200;
-    } catch {
-      return false;
+        throw lastError!;
     }
-  }
+
+    /**
+     * Handle and format errors from the API
+     */
+    private handleError(error: unknown, attempt: number): Error {
+        if (axios.isAxiosError(error)) {
+            const axiosError = error as AxiosError;
+
+            // Network errors
+            if (axiosError.code === 'ECONNABORTED' || axiosError.code === 'ETIMEDOUT') {
+                return new Error(`Request timeout (attempt ${attempt}/${this.maxRetries}). Please try again.`);
+            }
+
+            if (axiosError.code === 'ERR_NETWORK') {
+                return new Error(`Network error (attempt ${attempt}/${this.maxRetries}). Please check your connection.`);
+            }
+
+            // HTTP errors
+            if (axiosError.response) {
+                const status = axiosError.response.status;
+                const statusText = axiosError.response.statusText;
+
+                switch (status) {
+                    case 400:
+                        return new Error('Invalid request format. Please try rephrasing your message.');
+                    case 401:
+                        return new Error('Authentication failed. Please refresh the page and try again.');
+                    case 403:
+                        return new Error('Access denied. You may not have permission to use this service.');
+                    case 404:
+                        return new Error('Service not found. The chatbot API may be temporarily unavailable.');
+                    case 429:
+                        return new Error('Too many requests. Please wait a moment before trying again.');
+                    case 500:
+                        return new Error('Server error. The chatbot service is temporarily unavailable.');
+                    case 502:
+                    case 503:
+                    case 504:
+                        return new Error('Service temporarily unavailable. Please try again in a moment.');
+                    default:
+                        return new Error(`API error ${status}: ${statusText} (attempt ${attempt}/${this.maxRetries})`);
+                }
+            }
+        }
+
+        // Generic error handling
+        if (error instanceof Error) {
+            return new Error(`${error.message} (attempt ${attempt}/${this.maxRetries})`);
+        }
+
+        return new Error(`Unknown error occurred (attempt ${attempt}/${this.maxRetries})`);
+    }
+
+    /**
+     * Delay utility for retry mechanism
+     */
+    private delay(ms: number): Promise<void> {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    /**
+     * Health check for the API
+     */
+    async healthCheck(): Promise<boolean> {
+        try {
+            const response = await axios.get(`${this.apiUrl.replace('/chat', '/health')}`, {
+                timeout: 5000
+            });
+            return response.status === 200;
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * Get session information
+     */
+    public getSessionInfo(): ChatSession | null {
+        if (this.currentSession && this.isSessionValid(this.currentSession)) {
+            return { ...this.currentSession };
+        }
+        return null;
+    }
+
+    /**
+     * Check if there's an active session
+     */
+    public hasActiveSession(): boolean {
+        return this.currentSession !== null && this.isSessionValid(this.currentSession);
+    }
+
+    /**
+     * End current session
+     */
+    public endSession(): void {
+        this.clearSession();
+    }
 }
 
 // Export a singleton instance
