@@ -1,0 +1,506 @@
+---
+sidebar_title: Active FIPs
+page_title: Account Aggregator Active FIPs
+order: 4
+visible_in_sidebar: true
+---
+
+## Get Active FIPs
+
+The GET Active FIP List API is the new version of our API to call the list of Active FIPs from which your customers can discover accounts, and consent to share data. The Active FIP List API works in a manner that
+
+-   Dynamically activates and deactivates the status of FIPs based on performance.
+-   Can be used to simply check the status of FIPs that are active or inactive on the ecosystem.
+-   Can be used by FIUs as a mode of selection of FIPs/providers where a user has an account.
+-   Multi-AA Support: Now tracking OneMoney, Finvu, Anumati, Saafe, and more!
+-   Dual-Metric System: Combined data fetch + consent approval rates
+-   Provides real-time success rates to help FIUs make data-driven decisions about creating consents, allowing them to route users to alternate data collection methods when FIP performance is poor.
+
+#### Details Shared in the FIP List API
+
+Below is the parameters shared in the FIP List API that gives you each of the relevant details of the FIPs.
+These key details can be used by you for purposes like - offering a list of FIPs for your end-users to select or routing users to the Setu AA flow based on whether an FIP is active or not.
+
+<table>
+    <tr>
+        <th>
+            <strong>Field</strong>
+        </th>
+        <th>
+            <strong>Description</strong>
+        </th>
+    </tr>
+    <tr>
+        <td>
+            <code>name</code>
+        </td>
+        <td>
+            The name of the FIP - this is typically their brand name in camel
+            case format.
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>fipId</code>
+        </td>
+        <td>
+            The unique identifier for the FIP in the central registry of
+            participants maintained by Sahamati. This can be used in Context
+            filters if you want auto-discovery or to only discover accounts from
+            a particular institution. This is also the ID that is available in
+            the logs of data fetch transactions.
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>fiTypes</code>
+        </td>
+        <td>
+            This refers to the type of data available via the FIP. For example,
+            an FIP with fiTypes “DEPOSITS“ will have Savings or Current
+            Accounts available and be able to share bank statements upon user
+            consent
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>status</code>
+        </td>
+        <td>
+            The Status field gives you the up-to-date status of the FIP. This
+            will determine whether the FIP’s accounts can be discovered and
+            whether data can be fetched from this FIP. More details on the
+            statuses in the next section.
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>dataFetchSuccessRate</code>
+        </td>
+        <td>
+            The data fetch success rate for any FIP is calculated based on successful data retrievals in the last 1 hour.<br/><br/>
+            Formula: (Number of successful data fetches / Total number of data sessions created) × 100<br/><br/>
+            Example: If data sessions are created for 100 FIP accounts and 80 are successfully fetched<br/>
+            Data Fetch Success Rate = (80/100) × 100 = 80%<br/><br/>
+            If data fetch success rate is unavailable (minimum 100 accounts fetched needed): System will return a null value
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>consentConversionRate</code>
+        </td>
+        <td>
+            The consent approval rate is calculated based on consent approvals in the last 1 hour.<br/><br/>
+            Formula: (Number of approved consents / Total number of opened consent) × 100<br/><br/>
+            Example: If 100 consents were opened with FIP specified in context filter and 70 were approved<br/>
+            Consent Approval Rate = (70/100) × 100 = 70%<br/><br/>
+            If consent approval rate data is unavailable (Minimum 20 opened consent needed): System will use only data fetch success rate
+        </td>
+    </tr>
+</table>
+
+#### Categories of FIP Status
+
+Below is the list of statuses for FIPs that you will see in a typical GET FIP List response.
+
+<table>
+    <tr>
+        <th>
+            <strong>Status</strong>
+        </th>
+        <th>
+            <strong>Description</strong>
+        </th>
+    </tr>
+    <tr>
+        <td>
+            <code>ACTIVE</code>
+        </td>
+        <td>
+            Is an available FIP for account discovery, account linking, consent
+            and data fetches
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>INACTIVE</code>
+        </td>
+        <td>
+            This is an unavailable FIP. If you are using this to route customers
+            to AA — please route your customers to alternate methods of data
+            collection.
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>TEMPORARILY_INACTIVE</code>
+        </td>
+        <td>
+            This is an FIP that has been disabled for breaching SLIs on
+            performance. If you are using this to route customers to AA — please
+            route your customers to alternate methods of data collection.
+            However, this is a temporary status and will be moved to ACTIVE
+            status once their performance has improved. Do not redirect your
+            customers to the consent flow when an FIP status is INACTIVE or
+            TEMPORARILY_INACTIVE as that will mean their consents and/or data
+            fetches are likely to fail.
+        </td>
+    </tr>
+</table>
+
+### FIP List API
+
+###### Request
+
+<CodeBlockWithCopy language="json">{` GET /v2/fips `}</CodeBlockWithCopy>
+<Row>
+    <Portion desktopSpan="whole">
+        <Tabs
+            tabs={[
+                {
+                    key: "1",
+                    label: <Badge type="success">SUCCESS</Badge>,
+                    content: (
+                        <>
+                            <h5>Response</h5>
+                            <CodeBlockWithCopy language="json">
+                                {`{
+    "data": [
+        {
+            "name": "Axis Bank",
+            "fipId": "AXIS001",
+            "fiTypes": [
+                "DEPOSIT"
+            ],
+            "institutionType": "BANK",
+            "status": "ACTIVE",
+            "consentConversionRate": 93.95, // Aggregate of all AA's
+            "dataFetchSuccessRate": 97.55,
+            "aaWiseSuccessRate": [
+                {
+                    "consentConversionRate": 95.35,
+                    "dataFetchSuccessRate": 98.55,
+                    "aa": "onemoney"
+                },
+                {
+                    "consentConversionRate": 92.55,
+                    "dataFetchSuccessRate": 96.55,
+                    "aa": "anumati"
+                }
+            ]
+        },
+        {
+            "name": "Federal Bank",
+            "fipId": "FDRLFIP",
+            "fiTypes": [
+                "DEPOSIT"
+            ],
+            "institutionType": "BANK",
+            "status": "ACTIVE",
+            "consentConversionRate": 95.25,
+            "dataFetchSuccessRate": 95.25,
+            "aaWiseSuccessRate": [
+                {
+                    "consentConversionRate": 95.25,
+                    "dataFetchSuccessRate": 95.25,
+                    "aa": "onemoney"
+                }
+            ]
+        },
+        {
+            "name": "IndusInd Bank Ltd.",
+            "fipId": "fiplive@indusind",
+            "fiTypes": [
+                "DEPOSIT",
+                "TERM_DEPOSIT",
+                "RECURRING_DEPOSIT"
+            ],
+            "institutionType": "BANK",
+            "status": "TEMPORARILY_INACTIVE",
+            "consentConversionRate": 45.20,
+            "dataFetchSuccessRate": 9.20,
+            "aaWiseSuccessRate": [
+                {
+                    "consentConversionRate": 45.20,
+                    "dataFetchSuccessRate": 9.20,
+                    "aa": "finvu"
+                }
+            ]
+        },
+        {
+            "name": "HDFC Bank",
+            "fipId": "HDFC-FIP",
+            "fiTypes": [
+                "DEPOSIT"
+            ],
+            "institutionType": "BANK",
+            "status": "INACTIVE",
+            "consentConversionRate": null,
+            "dataFetchSuccessRate": null,
+            "aaWiseSuccessRate": []
+        }
+   ],
+   "traceId": "1-64313583-255e3a0705424652664584b2"
+}
+}`}
+                            </CodeBlockWithCopy>
+                        </>
+                    ),
+                },
+                {
+                    key: "2",
+                    label: <Badge type="failure">FAIL</Badge>,
+                    content: (
+                        <>
+                            <h5>Response</h5>
+                            <CodeBlockWithCopy language="json">
+                                {`{
+  "errorMsg": "string",
+  "errorCode": "string",
+  "txnid": "string",
+  "timestamp": "2023-03-30T08:20:31.367Z",
+  "ver": "string"
+}`}
+                            </CodeBlockWithCopy>
+                        </>
+                    ),
+                },
+            ]}
+        />
+    </Portion>
+</Row>
+
+### Get FIP by ID API
+
+###### Request
+
+<CodeBlockWithCopy language="json">{` GET /v2/fips/:id `}</CodeBlockWithCopy>
+<Row>
+    <Portion desktopSpan="whole">
+        <Tabs
+            tabs={[
+                {
+                    key: "1",
+                    label: <Badge type="success">SUCCESS</Badge>,
+                    content: (
+                        <>
+                            <h5>Response</h5>
+                            <CodeBlockWithCopy language="json">
+                                {`{
+    "data": [
+        {
+            "name": "Axis Bank",
+            "fipId": "AXIS001",
+            "fiTypes": [
+                "DEPOSIT"
+            ],
+            "institutionType": "BANK",
+            "status": "ACTIVE",
+            "consentConversionRate": 93.95, // Aggregate of all AA's
+            "dataFetchSuccessRate": 97.55,
+            "aaWiseSuccessRate": [
+                {
+                    "consentConversionRate": 95.35,
+                    "dataFetchSuccessRate": 98.55,
+                    "aa": "onemoney"
+                },
+                {
+                    "consentConversionRate": 92.55,
+                    "dataFetchSuccessRate": 96.55,
+                    "aa": "anumati"
+                }
+            ]
+        }
+    ],
+    "traceId": "1-66ff79c7-46029a1f1aaa59083489fd46"
+}
+`}
+                            </CodeBlockWithCopy>
+                        </>
+                    ),
+                },
+                {
+                    key: "2",
+                    label: <Badge type="failure">FAIL</Badge>,
+                    content: (
+                        <>
+                            <h5>Response</h5>
+                            <CodeBlockWithCopy language="json">
+                                {`{
+  "errorMsg": "string",
+  "errorCode": "string",
+  "txnid": "string",
+  "timestamp": "2023-03-30T08:20:31.367Z",
+  "ver": "string"
+}`}
+                            </CodeBlockWithCopy>
+                        </>
+                    ),
+                },
+            ]}
+        />
+    </Portion>
+</Row>
+
+### Get FIPs by Status API
+
+###### Request
+
+<CodeBlockWithCopy language="json">{` GET /v2/fips?status=ACTIVE `}</CodeBlockWithCopy>
+<Row>
+    <Portion desktopSpan="whole">
+        <Tabs
+            tabs={[
+                {
+                    key: "1",
+                    label: <Badge type="success">SUCCESS</Badge>,
+                    content: (
+                        <>
+                            <h5>Response</h5>
+                            <CodeBlockWithCopy language="json">
+                                {`{
+    "data": [
+        {
+            "name": "Axis Bank",
+            "fipId": "AXIS001",
+            "fiTypes": [
+                "DEPOSIT"
+            ],
+            "institutionType": "BANK",
+            "status": "ACTIVE",
+            "consentConversionRate": 93.95, // Aggregate of all AA's
+            "dataFetchSuccessRate": 97.55,
+            "aaWiseSuccessRate": [
+                {
+                    "consentConversionRate": 95.35,
+                    "dataFetchSuccessRate": 98.55,
+                    "aa": "onemoney"
+                },
+                {
+                    "consentConversionRate": 92.55,
+                    "dataFetchSuccessRate": 96.55,
+                    "aa": "anumati"
+                }
+            ]
+        },
+        {
+            "name": "Federal Bank",
+            "fipId": "FDRLFIP",
+            "fiTypes": [
+                "DEPOSIT"
+            ],
+            "institutionType": "BANK",
+            "status": "ACTIVE",
+            "consentConversionRate": 95.25,
+            "dataFetchSuccessRate": 95.25,
+            "aaWiseSuccessRate": [
+                {
+                    "consentConversionRate": 95.25,
+                    "dataFetchSuccessRate": 95.25,
+                    "aa": "onemoney"
+                }
+            ]
+        }
+    ],
+    "traceId": "1-64313583-255e3a0705424652664584b2"
+}
+`}
+                            </CodeBlockWithCopy>
+                        </>
+                    ),
+                },
+                {
+                    key: "2",
+                    label: <Badge type="failure">FAIL</Badge>,
+                    content: (
+                        <>
+                            <h5>Response</h5>
+                            <CodeBlockWithCopy language="json">
+                                {`{
+  "errorMsg": "string",
+  "errorCode": "string",
+  "txnid": "string",
+  "timestamp": "2023-03-30T08:20:31.367Z",
+  "ver": "string"
+}`}
+                            </CodeBlockWithCopy>
+                        </>
+                    ),
+                },
+            ]}
+        />
+    </Portion>
+</Row>
+
+### Get FIPs by AA API
+
+###### Request
+
+<CodeBlockWithCopy language="json">{` GET v2/fips?aa={aaHandle} OR v2/fips/{fipId}?aa={aaHandle} `}</CodeBlockWithCopy>
+
+<Row>
+    <Portion desktopSpan="whole">
+        <Tabs
+            tabs={[
+                {
+                    key: "1",
+                    label: <Badge type="success">SUCCESS</Badge>,
+                    content: (
+                        <>
+                            <h5>Response</h5>
+                            <CodeBlockWithCopy language="json">
+                                {`{
+    "data": [
+        {
+            "name": "Axis Bank",
+            "fipId": "AXIS001",
+            "fiTypes": [
+                "DEPOSIT"
+            ],
+            "institutionType": "BANK",
+            "status": "ACTIVE",
+            "consentConversionRate": 95.35, // OneMoney's consent conversion rate if passed AA is OneMoney
+            "dataFetchSuccessRate": 98.55,
+        }
+    ],
+    "traceId": "1-67bbf88f-6153048b7fd4bc7913995114"
+}`}
+                            </CodeBlockWithCopy>
+                        </>
+                    ),
+                },
+                {
+                    key: "2",
+                    label: <Badge type="failure">FAIL</Badge>,
+                    content: (
+                        <>
+                            <h5>Response</h5>
+                            <CodeBlockWithCopy language="json">
+                                {`{
+  "errorMsg": "string",
+  "errorCode": "string",
+  "txnid": "string",
+  "timestamp": "2023-03-30T08:20:31.367Z",
+  "ver": "string"
+}`}
+                            </CodeBlockWithCopy>
+                        </>
+                    ),
+                },
+            ]}
+        />
+    </Portion>
+</Row>
+
+##### Using Get FIP List for routing end-users to AA Flows
+
+FIUs can use the FIP List API to route their end users to the AA flow or non-AA flows (Like PDF uploads, net banking integrations or alternative data collection modes)if the FIP is temporarily deactivated if the provider is not part of the list of active FIPs.
+How can you as an FIU route your users and select FIPs (providers where your end-user had accounts) ? We offer two modes of account discovery.
+
+The two methods are as follows.
+
+-   **Standard User Selection of FIPs**: Here it is used to offer FIP (Bank, insurers, securities providers, etc) selection when a customer begins a consent flow from Setu
+
+-   **Custom routing an FIP selection**: FIUs can use the API to have FIP selection on their own page OR “Pre-select” FIPs (a maximum of 6 FIPs can be selected in this method)and auto-discover accounts by passing FIP ID in the context parameter on the Create consent API.
+
+<WasPageHelpful />

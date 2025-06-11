@@ -1,0 +1,654 @@
+---
+sidebar_title: Data flow
+page_title: Account Aggregator Data flow
+order: 2
+visible_in_sidebar: true
+---
+
+## Data Flow
+
+Below is a summary of the APIs you need to use to fetch FI data. These APIs are to be used only once your customer has approved consent request. The flow mainly involves data fetching against a valid data session with below APIs.
+
+- **Create Data Session**—Call this API against an `APPROVED` consent. This initiates data preparation at user's linked FIP accounts. You will be notified by Setu once the data is ready to be fetched.
+- **Fetch FI data**—Fetch decrypted FI data with data session id.
+
+![](https://storage.googleapis.com/strapi-assets/latest/data_session_56485983c0/data_session_56485983c0.png)
+
+<hr class="primary" />
+
+### Create new Data Session API
+
+Call this API to create a data session against the approved `consentId`.
+
+##### Request
+
+Specify the format in which you wish to receive the decrypted financial data, this can be **xml** or **json**.
+
+<Callout type="tip">
+  Make sure that values of <code>dataRange</code> array in the body, matches or
+  is within the <code>FIDataRange</code> specified in the Create consent request
+  API.
+</Callout>
+
+<br />
+
+<CodeBlockWithCopy language="json">
+  {`POST /sessions
+{
+    "consentId": "d4f40bd9-a22f-4408-a622-4e8a1e4fbda6",
+    "dataRange": {
+        "from": "2016-12-06T11:39:57.153Z",
+        "to": "2021-12-31T14:25:33.440Z"
+    },
+    "format": "json"
+}`}
+</CodeBlockWithCopy>
+
+<Row>
+    <Portion desktopSpan="whole">
+        <Tabs
+            tabs={[
+                {
+                    key: "1",
+                    label: <Badge type="success">SUCCESS</Badge>,
+                    content: (
+                        <>
+                            <h5>Response</h5>
+                            <p>
+                                This initiates a data session with a{" "}
+                                <code>id</code>, that uniquely identifies this
+                                data request. Setu will also notify you when the
+                                FIP is ready to share the data you requested and
+                                you can use the <code>id</code> to fetch the
+                                data with the next API.
+                            </p>
+                            <CodeBlockWithCopy language="json">
+                                {`{
+    "format": "json",
+    "fips": null,
+    "dataRange": {
+        "to": "2021-06-30T16:30:16.363Z",
+        "from": "2021-05-30T11:39:57.154Z"
+    },
+    "id": "f608b1c5-60cb-445d-8355-76a9cc053535",
+    "status": "PENDING",
+    "consentId": "c8b03bc3-6b6c-45e2-a604-6f7ec4541e57",
+    "traceId": "1-646c4a4c-34b8663b0f1238aa04412e89"
+}`}
+                            </CodeBlockWithCopy>
+                        </>
+                    ),
+                },
+                {
+                    key: "2",
+                    label: <Badge type="failure">FAIL</Badge>,
+                    content: (
+                        <>
+                            <h5>Response</h5>
+                            <CodeBlockWithCopy language="json">
+                                {`{
+  "errorMsg": "string",
+  "errorCode": "string",
+  "txnid": "string",
+  "timestamp": "2023-03-30T08:20:31.367Z",
+  "ver": "string"
+}`}
+                            </CodeBlockWithCopy>
+                            <h5>Error codes</h5>
+                            <p>A mapping of error codes and messages</p>
+                            <table>
+                                <tr>
+                                    <th>
+                                        <strong>Status codes</strong>
+                                    </th>
+                                    <th>
+                                        <strong>Error codes</strong>
+                                    </th>
+                                    <th>
+                                        <strong>Error messages</strong>
+                                    </th>
+                                </tr>
+                                <tr>
+                                    <td>404</td>
+                                    <td>
+                                        <code>NotFound</code>
+                                    </td>
+                                    <td>
+                                        <ul>
+                                            <li>Consent not found</li>
+                                        </ul>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>400</td>
+                                    <td>
+                                        <code>Invalid request</code>
+                                    </td>
+                                    <td>
+                                        <ul>
+                                            <li>Invalid request body</li>
+                                        </ul>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>500</td>
+                                    <td>
+                                        <code>InternalServerError</code>
+                                    </td>
+                                    <td>
+                                        An internal server error has occurred, please try again in some
+                                        time. You can report this to aa@setu.co
+                                    </td>
+                                </tr>
+                            </table>
+                        </>
+                    ),
+                },
+            ]}
+        ></Tabs>
+    </Portion>
+
+</Row>
+
+<hr class="primary" />
+
+### Fetch FI data
+
+For each data session created, Setu will notify you on the webhook endpoint configured by you, as and when each FIP in the data session responds with an update. See <a href="/data/account-aggregator/api-integration/notifications#fi-notification">FI notifications</a>.
+
+When the combined data session status in the notification is either `PARTIAL` or `COMPLETED`, you can fetch FI data with this API.
+
+##### Request
+
+If you request for multiple FI types, you will receive all the FI data from end-user's linked accounts in an array.
+
+<CodeBlockWithCopy language="bash">{`GET /sessions/:id`}</CodeBlockWithCopy>
+
+##### Response
+
+<Row>
+    <Portion desktopSpan="whole">
+        <Tabs
+            tabs={[
+                {
+                    key: "1",
+                    label: <Badge type="success">SUCCESS</Badge>,
+                    content: (
+                        <>
+                            
+                            
+                            <h5>Response</h5>
+                            <p>The response comes with two statuses—
+                            <ul>
+                                <li>Individual account FI status</li>
+                                <li>Combined data session status</li>
+                            </ul>
+                            <table>
+                                <tr>
+                                    <th>
+                                        <b>Individual account FI status</b>
+                                    </th>
+                                    <th>
+                                        <b>Explanation</b>
+                                    </th>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <code>PENDING</code>
+                                    </td>
+                                    <td>
+                                        FIP has received the account data request
+                                    </td>
+                                </tr>
+                                 <tr>
+                                    <td>
+                                        <code>READY</code>
+                                    </td>
+                                    <td>
+                                        FIP is ready with the requested account data 
+                                    </td>
+                                </tr>
+                                 <tr>
+                                    <td>
+                                        <code>DELIVERED</code>
+                                    </td>
+                                    <td>
+                                        FIP has delivered the requested account data 
+                                    </td>
+                                </tr>
+                                 <tr>
+                                    <td>
+                                        <code>TIMEOUT</code>
+                                    </td>
+                                    <td>
+                                        The account data request to the FIP has timed out 
+                                    </td>
+                                </tr>
+                                 <tr>
+                                    <td>
+                                        <code>DENIED</code>
+                                    </td>
+                                    <td>
+                                        FIP has denied sharing the requested account data 
+                                    </td>
+                                </tr>
+                            </table>
+                            <br />
+                            <table>
+                                <tr>
+                                    <th>
+                                        <b>Combined data session status</b>
+                                    </th>
+                                    <th>
+                                        <b>Individual account FI status</b>
+                                    </th>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <code>PENDING</code>
+                                    </td>
+                                    <td>
+                                        Individual account FI status of all accounts in the data session are in <code>PENDING</code> status. Data fetch for this data session was not supposed to be initiated.
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <code>PARTIAL</code>
+                                    </td>
+                                    <td>
+                                        One or more accounts have individual FI account status as <code>READY</code> but the remaining have status as <code>PENDING</code>/<code>FAILED</code>/<code>TIMEOUT</code>. Only data from accounts with status as <code>READY</code> was fetched.
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <code>COMPLETED</code>
+                                    </td>
+                                    <td>
+                                        Individual account FI status of all accounts is <code>READY</code> and data from all accounts was fetched.
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <code>EXPIRED</code>
+                                    </td>
+                                    <td>
+                                        Data session has expired, irrespective of individual account FI statuses. No further fetches can happen for this data session.
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <code>FAILED</code>
+                                    </td>
+                                    <td>
+                                        Data session has failed, irrespective of individual account FI statuses. Retry by creating a new data session.
+                                    </td>
+                                </tr>
+                            </table>
+<br />
+The payload contains Profile, Summary and Transactions as requested in Create consent
+request.
+
+</p>
+                            <CodeBlockWithCopy language="json">
+    {`{
+  "status": "PARTIAL", // combined data session status
+  "format": "json",
+  "fips": [
+    {
+      "accounts": [
+        {
+          "linkRefNumber": "b2329f47-0a6f-4131-adb5-9ef7b4c1ca6a",
+          "maskedAccNumber": "XXXXXX4373",
+          "status": "DELIVERED" // individual account FI status
+          "data": {
+            "account": {
+              "linkedAccRef": "b2329f47-0a6f-4131-adb5-9ef7b4c1ca6a",
+              "maskedAccNumber": "XXXXXX4373",
+              "type": "deposit",
+              "version": "1.1",
+              "profile": {
+                "holders": {
+                  "type": "SINGLE",
+                  "holder": {
+                    "address": "8/1190, 5th Cross, 3rd Main, 7th Block, Jayanagar, Bangalore - 560011",
+                    "ckycCompliance": "true",
+                    "dob": "1947-08-15",
+                    "email": "mail@mail.com",
+                    "landline": "",
+                    "mobile": "8569884373",
+                    "name": "Akshay Kumar",
+                    "nominee": "REGISTERED",
+                    "pan": "AAAAA0000A"
+                  }
+                }
+              },
+              "summary": {
+                "currentBalance": "101666.33",
+                "currency": "INR",
+                "branch": "Jayanagar 4th Block",
+                "balanceDateTime": "2020-06-22T07:50:00+00:00",
+                "currentODLimit": "0",
+                "drawingLimit": "0",
+                "exchgeRate": " ",
+                "facility": "OD",
+                "ifscCode": "ICIC0001124",
+                "micrCode": "500240246",
+                "openingDate": "2004-08-06",
+                "status": "ACTIVE",
+                "type": "SAVINGS",
+                "Pending": {
+                  "transactionType": "DEBIT",
+                  "amount": "0"
+                }
+              },
+              "transactions": {
+                "startDate": "2021-04-01",
+                "endDate": "2021-09-30"
+              }
+            }
+          },
+        }
+      ],
+      "fipID": "Setu-FIP"
+    },
+    {
+      "accounts": [
+        {
+          "linkRefNumber": "b2329f47-0a6f-4131-adb5-9ef7b4c1ca6a",
+          "maskedAccNumber": "XXXXXX4373",
+          "FIstatus": "FAILED",  // individual account FI status
+          "data": null
+        }
+      ],
+      "fipID": "ACME-FIP"
+    }
+  ],
+  "id": "378ec65c-f558-49fc-89ea-e880c2cf88b3",
+  "dataRange": {
+    "from": "2021-04-01T00:00Z",
+    "to": "2021-09-30T00:00Z"
+  },
+  "consentId": "d4f40bd9-a22f-4408-a622-4e8a1e4fbda6"
+}`}
+                        </CodeBlockWithCopy>
+                        </>
+                    ),
+                },
+                {
+                    key: "2",
+                    label: <Badge type="failure">FAIL</Badge>,
+                    content: (
+                        <>
+                            <h5>Response</h5>
+                            <CodeBlockWithCopy language="json">
+{`{
+  "errorMsg": "string",
+  "errorCode": "string",
+  "txnid": "string",
+  "timestamp": "2023-03-30T08:20:31.367Z",
+  "ver": "string"
+}`}
+                            </CodeBlockWithCopy>
+                            <h5>Error codes</h5>
+                            <p>A mapping of error codes and messages</p>
+                            <table>
+                                <tr>
+                                    <th>
+                                        <strong>Status codes</strong>
+                                    </th>
+                                    <th>
+                                        <strong>Error codes</strong>
+                                    </th>
+                                    <th>
+                                        <strong>Error messages</strong>
+                                    </th>
+                                </tr>
+                                <tr>
+                                    <td>404</td>
+                                    <td><code>NotFound</code></td>
+                                    <td>
+                                        <ul>
+                                            <li>Consent not found</li>
+                                        </ul>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>400</td>
+                                    <td><code>Invalid request</code></td>
+                                    <td>
+                                        <ul>
+                                            <li>Invalid request body</li>
+                                        </ul>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>500</td>
+                                    <td><code>InternalServerError</code></td>
+                                    <td>
+                                        An internal server error has occurred, please try again in some
+                                        time. You can report this to aa@setu.co
+                                    </td>
+                                </tr>
+                            </table>
+                        </>
+                    ),
+                },
+            ]}
+        ></Tabs>
+    </Portion>
+</Row>
+
+<hr class="primary" />
+
+### Auto-Fetch data feature
+
+As seen above, once a consent is approved, FIUs need to create a data session, listen to notifications and then fetch FI data.
+
+Auto-Fetch data feature aims to absorb this complexity from the FIUs. With Auto-Fetch data feature enabled, the process will look like this—
+
+1. Consent is approved by the customer.
+2. Setu creates a data session automatically.
+3. Setu continuously monitors data availability through notifications and periodic checks:
+    - Listens to FI notifications from AA
+    - Performs periodic data fetches in case notifications are delayed or missed
+4. As soon as data becomes available, Setu fetches and sends it to the FIU.
+    - For one time consents, Auto-Fetch executes only once, right after the consent is approved.
+    - For recurring consents, Auto-Fetch can fetch data periodically. Set up the frequency of Auto-Fetch data in your configuration on the Bridge.
+
+<img src="https://storage.googleapis.com/strapi-assets/latest/auto-fetch-workflow/auto-fetch-workflow.png" />
+
+<Callout type="tip">
+  Auto-Fetch can be set up on Bridge, under Step 1 of your product
+  configuration.
+</Callout>
+
+<br />
+
+<Callout type="warning">
+  When Auto-Fetch is enabled, it will automatically fetch data for all approved
+  consents and you will be automatically charged for successful fetches.
+</Callout>
+
+<br />
+<br />
+
+##### Auto fetch notification payload
+
+<Row>
+    <Portion desktopSpan="whole">
+        <Tabs
+            tabs={[
+                {
+                    key: "1",
+                    label: <Badge type="success">SUCCESS</Badge>,
+                    content: (
+                        <>
+                            <CodeBlockWithCopy language="json">
+{`POST /your-webhook-endpoint
+{
+  "type": "FI_DATA_READY",
+  "consentId": "58180119-15bc-454f-83bb-192efda9321b",
+  "status": "COMPLETED", // Can be PENDING/PARTIAL/COMPLETED
+  "dataRange": {
+    "from": "2023-07-25T11:27:01.069Z",
+    "to": "2023-07-25T11:28:00.648Z"
+  },
+  "fiData": [
+    {
+      "fipID": "setu-fip",
+      "data": [
+        {
+          "linkRefNumber": "4b4cc8fb-89eb-41c3-bc64-fec2497d5454",
+          "maskedAccNumber": "XXXXXXXX7561",
+          "decryptedFI": {
+            "account": {
+              "linkedAccRef": "4b4cc8fb-89eb-41c3-bc64-fec2497d5454",
+              "maskedAccNumber": "XXXXXXXX7561",
+              "type": "deposit",
+              "version": "1.1",
+              "profile": {
+                "holders": {
+                  "type": "SINGLE",
+                  "holder": [
+                    {
+                      "address": "758, Das Nagar Bikaner 455148",
+                      "ckycCompliance": "false",
+                      "dob": "1983-09-08",
+                      "email": "buchzain@setu-dummy.com",
+                      "mobile": "3536459776",
+                      "name": "Tushar Balakrishnan",
+                      "nominee": "REGISTERED",
+                      "pan": "SMPXE2207K"
+                    }
+                  ]
+                }
+              },
+              "transactions": {
+                "startDate": "2020-04-01T00:00:00.000Z",
+                "endDate": "2023-01-01T00:00:00.000Z",
+                "transaction": [
+                  {
+                    "amount": "33834.65",
+                    "currentBalance": "489971.1",
+                    "mode": "UPI",
+                    "narration": "UPI/CR/457233689286/Gatik Yohannan/CZBR/64321752",
+                    "reference": "966712146",
+                    "transactionTimestamp": "2020-05-08T11:05:29+00:00",
+                    "txnId": "EUCE23840883221703",
+                    "type": "CREDIT",
+                    "valueDate": "2020-05-09T11:05:29+00:00"
+                  },
+                  {
+                    "amount": "16480.04",
+                    "currentBalance": "408905.24",
+                    "mode": "UPI",
+                    "narration": "UPI/CR/988357930370/Dhruv Desai/RZJF/85716960",
+                    "reference": "510260839",
+                    "transactionTimestamp": "2020-12-16T21:49:14+00:00",
+                    "txnId": "ZJGE96715479740775",
+                    "type": "CREDIT",
+                    "valueDate": "2020-12-17T21:49:14+00:00"
+                  }
+                  //more transactions
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}`}
+                            </CodeBlockWithCopy>
+                        </>
+                    ),
+                },
+                {
+                    key: "2",
+                    label: <Badge type="failure">FAIL</Badge>,
+                    content: (
+                        <>
+                            <CodeBlockWithCopy language="json">
+{`POST /your-webhook-endpoint
+{
+    "type": "FI_DATA_FAILED",
+    "timestamp": "2023-08-28T17:12:51.521Z",
+    "consentId": "af43608a-ed6e-4c65-9745-0386ba5fd91b",
+    "success": true,
+    "data": null,
+    "error": {
+        "code": "InvalidConsentUse",
+        "message": "Consent fetch frequency exceeded"
+    }
+}`}
+                            </CodeBlockWithCopy>
+                            <h5>Error codes</h5>
+                            <p>A mapping of error codes and messages</p>
+                            <table>
+                                <tr>
+                                    <th>
+                                        <strong>Error codes</strong>
+                                    </th>
+                                    <th>
+                                        <strong>Error messages</strong>
+                                    </th>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <code>InvalidConsentUse</code>
+                                    </td>
+                                    <td>
+                                        Consent fetch frequency exceeded
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <code>InvalidConsentStatus</code>
+                                    </td>
+                                    <td>
+                                        Consent for which data fetch has been requested has expired
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <code>SessionExpired</code>
+                                    </td>
+                                    <td>
+                                        Session to fetch data for a session ID has expired
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <code>ConsentRevoked</code>
+                                    </td>
+                                    <td>
+                                        Consent for which data fetch has been requested has been revoked
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <code>UpstreamServerDown</code>
+                                    </td>
+                                    <td>
+                                        Received 500 from upstream AA
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <code>DataFetchFailure</code>
+                                    </td>
+                                    <td>
+                                        Failed to fetch data after multiple retry attempts due to upstream errors
+                                    </td>
+                                </tr>
+                            </table>
+                        </>
+                    ),
+                },
+            ]}
+        ></Tabs>
+    </Portion>
+
+</Row>
+
+<WasPageHelpful />

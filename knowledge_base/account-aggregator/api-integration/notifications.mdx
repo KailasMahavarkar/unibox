@@ -1,0 +1,228 @@
+---
+sidebar_title: Notifications
+page_title: Account Aggregator Notifications
+order: 3
+visible_in_sidebar: true
+---
+
+## Notifications
+
+Below is a summary of the API endpoints you need to implement on your server and expose to receive notifications from Setu AA. These notifications are webhooks from Setu based on the events that occur during the consent and data flow.
+
+The `base_url` is the server URL you share with us to receive notifications.
+
+To **get started quickly**, you can setup a mock API endpoint using <a href="https://beeceptor.com/" target="_blank">Beeceptor</a>. Once configured on Bridge, Setu will send notifications to that URL. This will help you understand the notification flow before you start to implement it on your server.
+
+###### Types of notifications
+
+- **Consent notification**—notification triggered for the events that occur in consent flow
+- **FI notification**—notification triggered for the events that occur in data flow
+
+Note: Webhooks retries will be added in future iterations.
+
+<hr class="primary" />
+
+#### Consent notification
+
+This notification is used to communicate the updated status of the consent. We do not send notification for consent status `PENDING`.
+
+| ** Consent status** | **Explanation**                                            |
+| ------------------- | ---------------------------------------------------------- |
+| `PENDING`           | The consent has been created and customer action is awaited        |
+| `ACTIVE`            | Customer has approved the consent                          |
+| `REJECTED`          | Customer has rejected consent                              |
+| `REVOKED`           | Customer has revoked consent which was previously approved |
+| `PAUSED`            | Customer has paused a previously approved consent          |
+| `EXPIRED`           | The consent has expired                                    |
+
+###### Consent notification Payload
+
+Setu will post this payload to your notification endpoint whenever there is a change in consent status.
+
+<CodeBlockWithCopy language="json">
+  {`{
+  "data": {
+    "status": "ACTIVE",
+    "detail": {
+      "accounts": [
+        {
+          "maskedAccNumber": "XXXXXXXX6053",
+          "accType": "CURRENT",
+          "fipId": "setu-fip",
+          "fiType": "DEPOSIT",
+          "linkRefNumber": "e4b27e62-e41a-42c0-a5b3-0a5542b25ddf"
+        }
+      ]
+    }
+  },
+  "timestamp": "2023-04-03T09:14:43.323Z",
+  "success": true,
+  "type": "CONSENT_STATUS_UPDATE",
+  "error": null,
+  "consentId": "c16cc10e-eae3-4277-96e1-64c0ed21c53e"
+}`}
+</CodeBlockWithCopy>
+
+In cases where the user **cancels** the consent before login, or **rejects** the consent after login, an error code and error message will be included in the notification payload.
+
+
+<Row>
+  <Portion desktopSpan="whole">
+    <Tabs
+      tabs={[
+        {
+          key: "1",
+          label: <Badge type="failure">UserCancelled</Badge>,
+          content: (
+            <>
+              <h5>Response</h5>
+              <CodeBlockWithCopy language="json">
+                  {`{
+  "success": false,
+  "error": {
+    "code": "UserCancelled",
+    "message": "cancel_not_understand"
+  },
+  "data": null,
+  "consentId": "72cb6cb8-c248-4b88-9282-18262fbdfbc2",
+  "notificationId": "66d5fef5-d5f3-48f6-afe7-1e82ac952ecb",
+  "timestamp": "2024-01-29T07:28:24.547Z",
+  "type": "CONSENT_STATUS_UPDATE"
+}`}
+              </CodeBlockWithCopy>
+            </>
+          ),
+        },
+        {
+          key: "2",
+          label: <Badge type="failure">UserRejected</Badge>,
+          content: (
+            <>
+              <h5>Response</h5>
+              <CodeBlockWithCopy language="json">
+                  {`{
+  "success": false,
+  "error": {
+    "code": "UserRejected",
+    "message": "reject_not_want_to_share"
+  },
+  "data": null,
+  "consentId": "72cb6cb8-c248-4b88-9282-18262fbdfbc2",
+  "notificationId": "66d5fef5-d5f3-48f6-afe7-1e82ac952ecb",
+  "timestamp": "2024-01-29T07:28:24.547Z",
+  "type": "CONSENT_STATUS_UPDATE"
+}`}
+              </CodeBlockWithCopy>
+            </>
+          ),
+        },
+        {
+          key: "3",
+          label: <Badge type="failure">Upstream AA</Badge>,
+          content: (
+            <>
+              <h5>Response</h5>
+              <CodeBlockWithCopy language="json">
+                {`{
+  "success": false,
+  "error": {
+    "code": "ConsentObjectCreationFailure",
+    "message": "Internal server error occurred while fetching consent details from upstream AA"
+  }
+  "data": null,
+  "consentId": "72cb6cb8-c248-4b88-9282-18262fbdfbc2",
+  "notificationId": "66d5fef5-d5f3-48f6-afe7-1e82ac952ecb",
+  "timestamp": "2024-01-29T07:28:24.547Z",
+  "type": "CONSENT_STATUS_UPDATE"
+}`}
+              </CodeBlockWithCopy>
+            </>
+          ),
+        },
+      ]}
+    />
+  </Portion>
+</Row>
+
+
+###### Consent error codes
+Mapping of error code, error message and it's meaning:
+
+| **Error Code** | **Error Message** | **Meaning** |
+| :--- | :--- | :--- |
+| `UserCancelled` | `cancel_not_understand` | I do not understand what is happening |
+| `UserCancelled` | `cancel_will_share_later` | I will share my data later |
+| `UserCancelled` | `cancel_not_want_to_share` | I do not want to share my data with FIU |
+| `UserRejected` | `reject_not_understand` | I do not understand why my data is being requested |
+| `UserRejected` | `reject_not_want_to_share` | I do not want to share my data with FIU |
+| `UserRejected` | `reject_accounts_not_found` | I could not find my accounts |
+| `UserRejected` | `reject_other` | For other reasons |
+| `NoFIPAccountsDiscovered` | `no_fip_accounts_found` |No fip accounts discovered |
+| `FIPDenied` | `FIP_DENIED_CONSENT` | FIP denied your consent |
+
+
+<br />
+
+Please note that if user cancels the consent before login, this keeps the consent in `PENDING` state and same consent link can be used again. 
+
+<hr class="primary" />
+
+#### FI notification
+
+The Financial Information (FI) notification is used to communicate the data session status created by you using the **Create Data Session** API. Whenever each FIP in the data session responds with an update, this notification will be sent to the webhook endpoint configured by you.
+
+The FI notification payload contains two statuses—
+
+- Individual account FI status
+- Combined data session status
+
+| **Individual account FI status** | **Explanation**                                   |
+| -------------------------------- | ------------------------------------------------- |
+| `PENDING`                        | FIP has received the account data request         |
+| `READY`                          | FIP is ready with the requested account data      |
+| `DELIVERED`                      | FIP has delivered the requested account data      |
+| `TIMEOUT`                        | The account data request to the FIP has timed out |
+| `DENIED`                         | FIP has denied sharing the requested account data |
+
+<br />
+
+| **Combined data session status** | **Individual account FI status**                                                                                                                                                                                                             |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PENDING`                        | Individual account FI status of all accounts in the data session are in `PENDING` status. Data fetch for this data session cannot be initiated yet.                                                                                          |
+| `PARTIAL`                        | One or more accounts have individual FI account status as `READY` but the remaining have status as `FAILED`/`TIMEOUT`. Data fetch for this data session can be initiated. However, only data from `READY` accounts can be fetched. |
+| `COMPLETED`                      | Individual account FI status of all accounts is `READY`. Data fetch can be initiated for this data session.                                                                                                                                  |
+| `EXPIRED`                        | Data session has expired, irrespective of individual account FI statuses. No further fetches can happen for this data session.                                                                                                               |
+| `FAILED`                         | Data session has failed, irrespective of individual account FI statuses. Retry by creating a new data session.                                                                                                                               |
+
+<br />
+
+###### FI Notification Payload
+
+<CodeBlockWithCopy language="json">
+  {`{
+  "data": {
+    "status": "COMPLETED", // combined data session status
+    "fips": [
+      {
+        "accounts": [
+          {
+            "FIStatus": "READY", // individual account FI status
+            "description": "fi status description not found from FIP",
+            "linkRefNumber": "e4b27e62-e41a-42c0-a5b3-0a5542b25ddf"
+          }
+        ],
+        "fipID": "setu-fip"
+      }
+    ],
+    "format": "json"
+  },
+  "timestamp": "2023-04-03T09:20:53.424Z",
+  "dataSessionId": "32d40afc-4795-495d-8ca4-d817d730e5b5",
+  "success": true,
+  "type": "SESSION_STATUS_UPDATE",
+  "error": null,
+  "consentId": "c16cc10e-eae3-4277-96e1-64c0ed21c53e"
+}`}
+</CodeBlockWithCopy>
+
+<WasPageHelpful />

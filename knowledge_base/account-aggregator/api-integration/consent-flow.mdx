@@ -1,0 +1,873 @@
+---
+sidebar_title: Consent flow
+page_title: Account Aggregator Consent flow
+order: 1
+visible_in_sidebar: true
+---
+
+## Consent flow
+
+Get users' consent before you can start pulling their financial data with Setu AA by initiating Consent flow in your application. This flow broadly consists of two parts:
+
+1.  **Create consent request** — This is essentially a one-time data request that your user needs to approve. To know more details about this please visit [Consent Object](/data/account-aggregator/consent-object) page. Once a consent is created, you will receive a unique `id` with `status = PENDING`, along with a `url` where you can **redirect your customer to consent approval screens**, to review the data request. Here, the user may approve or reject the request
+
+2.  **Consent status** — You can track the consent status with Get Consent Status API, alternatively Setu will notify you when the user has acted upon the consent request. See [Notifications](/data/account-aggregator/api-integration/notifications) to configure your notification endpoint.
+
+Here are some more advanced features related to consents, which are explained in detail at the end.
+
+1. **Multi consents** — Merge two consents into a single UI flow, with its own unique dual consent ID.
+
+2. **Revoke a consent** — A revoke API for FIUs to withdraw or manually revoke an end users' consent for any purpose or on behalf of the customer
+
+<hr class="primary" />
+
+### Create Consent API
+
+Call this API to create a consent request. The details of the request will be presented to your customer on Setu’s screens, as part of the next step.
+
+<CodeBlockWithCopy language="json">
+    {`POST /consents
+{
+  "consentDuration": {
+    "unit" : "MONTH",
+    "value": "4"
+  },
+  "vua":  "999999999", // {{mobile}} or {{mobile}}@handle. Ex: 999999999@setu or 999999999@onemoney
+  "dataRange": {
+      "from": "2020-04-01T00:00:00Z",
+      "to": "2023-01-01T00:00:00Z"
+  },
+  "context": [
+  ],
+  "additionalParams": {
+    "tags": ["Loan_Tracking", "Partner_X"]
+  }
+}`}
+</CodeBlockWithCopy>
+<Row>
+    <Portion desktopSpan="whole">
+        <Tabs
+            tabs={[
+                {
+                    key: "1",
+                    label: <Badge type="success">SUCCESS</Badge>,
+                    content: (
+                        <>
+                            <h5>Response</h5>
+                            <p>
+                                Consent gets created with a unique identifier{" "}
+                                <code>id</code> with status as{" "}
+                                <code>PENDING</code>. Redirect your customers to
+                                consent approval flow <code>url</code> to review the consent.
+                            </p>
+                            <CodeBlockWithCopy language="json">
+                                {`{
+    "id": "6d285134-c764-49ab-b32d-ead003161587",
+    "url": "https://fiu.setu.co/v2/consents/webview/6d285134-c764-49ab-b32d-ead003161587",
+    "status": "PENDING",
+    "detail": {
+        "consentStart": "2023-04-10T05:36:43.011Z",
+        "fiTypes": ["DEPOSIT"],
+        "fetchType": "PERIODIC",
+        "purpose": {
+            "category": {
+                "type": "string"
+            },
+            "refUri": "https://api.rebit.org.in/aa/purpose/101.xml",
+            "code": "101",
+            "text": "Loan underwriting"
+        },
+        "vua": "999999999@onemoney",
+        "dataRange": {
+            "from": "2020-04-01T00:00:00.000Z",
+            "to": "2023-01-01T00:00:00.000Z"
+        },
+        "consentTypes": ["TRANSACTIONS", "PROFILE", "SUMMARY"],
+        "consentMode": "STORE",
+        "consentExpiry": "2023-08-08T05:36:43.011Z",
+        "frequency": {
+            "value": 30,
+            "unit": "MONTH"
+        },
+        "dataLife": {
+            "value": 1,
+            "unit": "MONTH"
+        }
+    },
+    "redirectUrl": "https://setu.co",
+    "context": [],
+    "usage": {
+        "count": "0",
+        "lastUsed": null
+    },
+    "tags": [
+        "Loan_Tracking",
+        "Partner_X"
+    ],
+    "traceId": "1-6433a06a-4b99c3a81b538bc762b5aa08"
+}
+`}
+                            </CodeBlockWithCopy>
+                        </>
+                    ),
+                },
+                {
+                    key: "2",
+                    label: <Badge type="failure">FAIL</Badge>,
+                    content: (
+                        <>
+                            <h5>Response</h5>
+                            <CodeBlockWithCopy language="json">
+                                {`{
+  "errorMsg": "string",
+  "errorCode": "string",
+  "txnid": "string",
+  "timestamp": "2023-03-30T08:20:31.367Z",
+  "ver": "string"
+}`}
+                            </CodeBlockWithCopy>
+                            <h5>Error codes</h5>
+                            <p>A mapping of error codes and messages for the Create consent API</p>
+                            <table>
+                                <tr>
+                                    <th>
+                                        <strong>Status codes</strong>
+                                    </th>
+                                    <th>
+                                        <strong>Error codes</strong>
+                                    </th>
+                                    <th>
+                                        <strong>Error messages</strong>
+                                    </th>
+                                </tr>
+                                <tr>
+                                    <td>400</td>
+                                    <td>
+                                        <code>InvalidRequest</code>
+                                    </td>
+                                    <td>
+                                        <ul>
+                                            <li>Invalid request body</li>
+                                            <li>Invalid response from upstream</li>
+                                        </ul>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>500</td>
+                                    <td>
+                                        <code>InternalServerError</code>
+                                    </td>
+                                    <td>An internal server error has occurred, please try again in some time. You can report this to aa@setu.co</td>
+                                </tr>
+                            </table>
+                        </>
+                    ),
+                },
+            ]}
+        />
+    </Portion>
+
+</Row>
+
+<hr class="primary" />
+
+### Consent review by customer
+
+On redirecting your users to `url`, it opens up a Consent approval flow that permits consent approval/rejection. This url can easily be embedded as a webview or be used to redirect from a website. The URL is of the form:
+
+`https://<fiu-base-url>/consents/webview/<id>`
+
+- `<fiu-base-url>` — This is the base URL provided by Setu.
+- `<id>` — This is the request ID of the consent generated returned after the create consent request.
+
+On getting redirected to the url, your users will be asked to verify their mobile number to further initiate the account fetching process. The mobile verification does a login, or register them with Setu using their mobile number. Setu creates a unique account aggregator handle for every registered customer.
+
+The following steps are handled by Setu’s screens—
+
+- OTP verification on user's mobile number
+- Setu authenticates the user and displays the data request
+- Setu fetches the Financial Information Providers or FIPs
+- User links the FIPs and reviews the request
+- Setu validates and saves consent
+- Setu sends notification to you to confirm consent approval. At this point, consent `status` is APPROVED or REJECTED
+
+<Callout type="tip">
+  Use Setu FIP or Setu FIP-2 to get access to mock financial data on staging. We have created these accounts to mock the FIP data schema based on the FIType chosen.
+  <br />Also, please note that Setu FIP has a dynamic OTP sent to the phone number with which you have created a consent, but Setu FIP-2 has a static OTP '123456'{" "}
+</Callout>
+
+<hr class="primary" />
+
+### Get Consent API
+
+Call this API to get the consent details and the updated status of a consent request by passing its unique `id`.
+
+If the consent is approved, the status in the response will be `ACTIVE`. After this, you can now initiate Data flow for the approved consent request.
+
+<Callout type="highlight">
+  Additionally, Setu AA will notify you on the consent status update by sending
+  a webhook notification to the configured endpoint you entered on the Bridge.
+  See more details on{" "}
+  <a href="/data/account-aggregator/api-integration/notifications">
+    Consent Notifications
+  </a>
+  .
+</Callout>{" "}
+
+<br />
+
+###### Request
+
+<CodeBlockWithCopy language="json">{` GET /consents/:id `}</CodeBlockWithCopy>
+<Row>
+  <Portion desktopSpan="whole">
+    <Tabs
+      tabs={[
+        {
+          key: "1",
+          label: <Badge type="success">SUCCESS</Badge>,
+          content: (
+            <>
+              <h5>Response</h5>
+              <CodeBlockWithCopy language="json">
+                {`{
+    "id": "e082b325-2692-47cd-88cf-875068df9051"
+    "url": "https://fiu.setu.co/consents/v2/webview/e082b325-2692-47cd-88cf-875068df9051",
+    "status": "PENDING",
+    "context": [],
+    "detail": {
+        "vua": "9999999999@anumati",
+        "consentStart": "2023-04-04T07:10:41.165Z",
+        "consentExpiry": "2023-08-02T12:40:41.165Z"
+    },
+    "accountsLinked": [],
+    "tags": [
+        "Loan_Tracking",
+        "Partner_X"
+    ],
+    "traceId": "26b8bc4c-5d33-43a1-a58f-be5d4d0acbd0"
+}`}
+              </CodeBlockWithCopy>
+              <p>
+                {" "}
+                If query param <code>expanded=true</code> is included in the request
+              </p>
+              <CodeBlockWithCopy language="json">
+                {`{
+    "id": "73633c01-d14d-4dbb-8a82-d82e53df5920",
+    "url": "https://fiu.setu.co/v2/consents/webview/73633c01-d14d-4dbb-8a82-d82e53df5920",
+    "status": "PENDING",
+    "detail": {
+        "purpose": {
+            "refUri": "https://api.rebit.org.in/aa/purpose/101.xml",
+            "code": "101",
+            "text": "Loan",
+            "category": {
+                "type": "string"
+            }
+        },
+        "consentStart": "2023-05-22T07:39:41.333Z",
+        "fiTypes": [
+            "DEPOSIT",
+            "EQUITIES",
+            "MUTUAL_FUNDS",
+            "GST_GSTR3B",
+            "GST_GSTR2A",
+            "GST_GSTR1"
+        ],
+        "frequency": {
+            "value": 3,
+            "unit": "MONTH"
+        },
+        "fetchType": "PERIODIC",
+        "vua": "99999999999@anumati",
+        "dataLife": {
+            "value": 1,
+            "unit": "YEAR"
+        },
+        "consentExpiry": "2023-09-19T13:09:41.333Z",
+        "dataFilter": [],
+        "consentTypes": ["TRANSACTIONS", "PROFILE"],
+        "dataRange": {
+            "from": "2020-04-01T00:00:00.000Z",
+            "to": "2023-01-01T00:00:00.000Z"
+        },
+        "consentMode": "STORE"
+    },
+    "context": [],
+    "usage": {
+        "lastUsed": null,
+        "count": "0"
+    },
+    "accountsLinked": [],
+    "tags": [
+        "Loan_Tracking",
+        "Partner_X"
+    ],
+    "traceId": "74d3032a-597e-40e1-859b-67b035e8a0e0"
+}`}
+              </CodeBlockWithCopy>
+            </>
+          ),
+        },
+        {
+          key: "2",
+          label: <Badge type="failure">FAIL</Badge>,
+          content: (
+            <>
+              <h5>Response</h5>
+              <CodeBlockWithCopy language="json">
+                {`{
+  "errorMsg": "string",
+  "errorCode": "string",
+  "txnid": "string",
+  "timestamp": "2023-03-30T08:20:31.367Z",
+  "ver": "string"
+}`}
+              </CodeBlockWithCopy>
+              <h5>Error codes</h5>
+              <p>A mapping of error codes and messages</p>
+              <table>
+                <tr>
+                  <th>
+                    <strong>Status codes</strong>
+                  </th>
+                  <th>
+                    <strong>Error codes</strong>
+                  </th>
+                  <th>
+                    <strong>Error messages</strong>
+                  </th>
+                </tr>
+                <tr>
+                  <td>404</td>
+                  <td>
+                    <code>NotFound</code>
+                  </td>
+                  <td>
+                    <ul>
+                      <li>Consent not found</li>
+                    </ul>
+                  </td>
+                </tr>
+                <tr>
+                  <td>400</td>
+                  <td>
+                    <code>Invalid request</code>
+                  </td>
+                  <td>
+                    <ul>
+                      <li>Consent has expired</li>
+                      <li>Invalid response from upstream</li>
+                    </ul>
+                  </td>
+                </tr>
+                <tr>
+                  <td>500</td>
+                  <td>
+                    <code>InternalServerError</code>
+                  </td>
+                  <td>
+                    An internal server error has occurred, please try again in
+                    some time. You can report this to aa@setu.co
+                  </td>
+                </tr>
+              </table>
+            </>
+          ),
+        },
+      ]}
+    />
+  </Portion>
+</Row>
+
+<hr class="primary" />
+
+### Multi consents
+
+In the Account Aggregator (AA) ecosystem in India, the multi consent feature allows Financial Information Users (FIUs) to streamline the process of obtaining consent from customers for data sharing. By merging multiple separate consent requests into a single flow, FIUs can enhance the user experience, reduce friction, and ensure higher completion rates for consent acquisition.
+
+<Callout type="tip">
+  Currently, the multi consent feature supports merging only two consents into a
+  multi consent
+</Callout>
+
+<br />
+
+<img src="https://storage.googleapis.com/strapi-assets/latest/dual-consent-approval-page/dual-consent-approval-page.png" />
+
+##### Features
+
+- **Single UI Flow** — Merges two consent requests into a single UI flow, displaying the consent parameters of each request in a consolidated manner.
+
+- **Optional and mandatory consents** — Offers flexibility in making one of the consents optional, while the other remains mandatory, allowing customers to choose which data they are willing to share.
+
+- **Unified OTP authentication** — Simplifies the authentication process by requiring only a single set of OTP authentications for the multi consent flow.
+
+<br />
+
+##### Create multi consent API
+
+- Create individual consent requests — Prior to using the Dual consent API, create the individual consent requests as per the standard procedure in the AA ecosystem.
+
+- Create multi consent — Use the provided API endpoint to create a multi consent process by specifying which consents are optional and which are mandatory.
+
+- Redirecting the customer to consent approval — On success, direct the customer to the redirectUrl for consent approval.
+
+- Get consent status — Monitor the status of each consent through the same **Get Consent API**, that is used for a single consent.
+
+###### Request
+
+<table>
+  <tbody>
+    <tr>
+      <th>Base URL</th>
+      <td>
+        Sandbox: <code>https://fiu-sandbox.setu.co</code>
+        <br />
+        Production: <code>https://fiu.setu.co</code>
+      </td>
+    </tr>
+    <tr>
+      <th>Path</th>
+      <td>
+        <code>/v2/consents/collection</code>
+      </td>
+    </tr>
+    <tr>
+      <th>Method</th>
+      <td>
+        <code>POST</code>
+      </td>
+    </tr>
+    <tr>
+      <th>Headers</th>
+      <td>
+        <code>Content-Type</code>: <code>application/json</code> <br />
+        <code>Authorization</code>: Bearer <code>access_token</code> <br />
+        <code>x-product-instance-id</code>: <code>product-instance-id</code>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<br />
+
+###### Sample Request body
+
+<CodeBlockWithCopy language="json">
+  {`{
+    "optionalConsents": [],
+    "mandatoryConsents": ["36c34bbc-9408-454e-a80e-e44f4fc4cdbf", "037801eb-923e-4592-80cc-b05cecaedba1"]
+}`}
+</CodeBlockWithCopy>
+
+<Callout type="warning">
+  At least one consent must be marked as mandatory to create a multi consent
+</Callout>
+
+<br />
+
+###### Sample Response
+
+<Row>
+  <Portion desktopSpan="whole">
+    <Tabs
+      tabs={[
+        {
+          key: "1",
+          label: <Badge type="success">SUCCESS</Badge>,
+          content: (
+            <>
+              <h5>Response</h5>
+              <CodeBlockWithCopy language="json">
+                {`{
+    "consentCollectionId": "5f3a5564-9abc-48f9-ae32-af4b22c781ce",
+    "url": "https://fiu-sandbox.setu.co/v2/consents/webview/5f3a5564-9abc-48f9-ae32-af4b22c781ce",
+    "txnid": "6aeb84aa-b078-4ab1-bdb6-fa0e82b18bb3",
+    "traceId": "b3f26ccb-a64d-4692-a02e-282bd8ef7778"
+}`}
+              </CodeBlockWithCopy>
+            </>
+          ),
+        },
+        {
+          key: "2",
+          label: <Badge type="failure">FAIL</Badge>,
+          content: (
+            <>
+              <h5>Response</h5>
+              <CodeBlockWithCopy language="json">
+                {`{
+    "traceId": "ec754b36-bf5f-4673-8be1-9d203d374c83",
+    "errorCode": "InvalidRequest",
+    "errorMsg": "Consent doesn't belong to same customer id"
+}`}
+              </CodeBlockWithCopy>
+            </>
+          ),
+        },
+      ]}
+    />
+  </Portion>
+</Row>
+
+<hr class="primary" />
+
+### Revoke consent
+
+The customer in the Account Aggregator framework has full control over their data and to ensure this, the framework allows the user to revoke a consent at any point of time. The general process of revoking a consent requires the user to login to Account Aggregator's platform and revoke the consent manually. However this might not be a seamless experience for the customer, who might expect to be able to revoke a consent directly from FIU's app. There might also be cases where the FIU might want to automatically revoke a consent.
+
+To solve for these use cases, AA framework provides a way for FIUs to communicate revokation of consent to the Account Aggregator. Setu's AA gateway provides a simple API to perform this action for any AA.
+
+###### Request
+
+<table>
+  <tbody>
+    <tr>
+      <th>Base URL</th>
+      <td>
+        Sandbox: <code>https://fiu-sandbox.setu.co</code>
+        <br />
+        Production: <code>https://fiu.setu.co</code>
+      </td>
+    </tr>
+    <tr>
+      <th>Path</th>
+      <td>
+        <code>/v2/consents/:request_id/revoke</code>
+      </td>
+    </tr>
+    <tr>
+      <th>Method</th>
+      <td>
+        <code>POST</code>
+      </td>
+    </tr>
+    <tr>
+      <th>Headers</th>
+      <td>
+        <code>Content-Type</code>: <code>application/json</code> <br />
+        <code>Authorization</code>: Bearer <code>access_token</code> <br />
+        <code>x-product-instance-id</code>: <code>product-instance-id</code>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<br />
+
+<Callout type="tip">This is a POST API without any request body</Callout>
+
+<br />
+
+###### Sample Response
+
+<Row>
+  <Portion desktopSpan="whole">
+    <Tabs
+      tabs={[
+        {
+          key: "1",
+          label: <Badge type="success">SUCCESS</Badge>,
+          content: (
+            <>
+              <h5>Response</h5>
+              <CodeBlockWithCopy language="json">
+                {`{
+    "status": "REVOKED",
+    "traceId": "b3f26ccb-a64d-4692-a02e-282bd8ef7778"
+}`}
+              </CodeBlockWithCopy>
+            </>
+          ),
+        },
+        {
+          key: "2",
+          label: <Badge type="failure">FAIL - Consent not found</Badge>,
+          content: (
+            <>
+              <h5>Response</h5>
+              <CodeBlockWithCopy language="json">
+                {`{
+    "traceId": "ec754b36-bf5f-4673-8be1-9d203d374c83",
+    "errorCode": "NotFound",
+    "errorMsg": "Consent not found"
+}`}
+              </CodeBlockWithCopy>
+            </>
+          ),
+        },
+        {
+          key: "3",
+          label: <Badge type="failure">FAIL - Consent not ready</Badge>,
+          content: (
+            <>
+              <h5>Response</h5>
+              <CodeBlockWithCopy language="json">
+                {`{
+    "traceId": "ec754b36-bf5f-4673-8be1-9d203d374c83",
+    "errorCode": "InvalidRequest",
+    "errorMsg": "Consent '061a7599-ee29-4edb-82a5-02c98315c4fe' is not ready"
+}`}
+              </CodeBlockWithCopy>
+            </>
+          ),
+        },
+        {
+          key: "4",
+          label: <Badge type="failure">FAIL - Consent expired</Badge>,
+          content: (
+            <>
+              <h5>Response</h5>
+              <CodeBlockWithCopy language="json">
+                {`{
+    "traceId": "ec754b36-bf5f-4673-8be1-9d203d374c83",
+    "errorCode": "InvalidRequest",
+    "errorMsg": "Consent '061a7599-ee29-4edb-82a5-02c98315c4fe' has expired"
+}`}
+              </CodeBlockWithCopy>
+            </>
+          ),
+        },
+      ]}
+    />
+  </Portion>
+</Row>
+
+<hr class="primary" />
+
+### Get Last Fetch Status
+
+This API retrieves the last data fetch status for a given consent ID. It provides details about the most recent data fetch operation associated with the consent, including the timestamp of the fetch, the data range covered, and the identifiers of the financial information providers (FIPs) involved.
+
+###### Request
+
+<table>
+  <tbody>
+    <tr>
+      <th>Base URL</th>
+      <td>
+        Sandbox: <code>https://fiu-sandbox.setu.co</code>
+        <br />
+        Production: <code>https://fiu.setu.co</code>
+      </td>
+    </tr>
+    <tr>
+      <th>Path</th>
+      <td>
+        <code>/v2/consents/:consent_request_id/fetch/status</code>
+      </td>
+    </tr>
+    <tr>
+      <th>Method</th>
+      <td>
+        <code>GET</code>
+      </td>
+    </tr>
+    <tr>
+      <th>Headers</th>
+      <td>
+        <code>Content-Type</code>: <code>application/json</code> <br />
+        <code>Authorization</code>: Bearer <code>access_token</code> <br />
+        <code>x-product-instance-id</code>: <code>product-instance-id</code> <br />
+        <code>Params</code>: <code>consent_request_id</code>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<br />
+
+<Callout type="tip">This is a GET API without any request body</Callout>
+
+<br />
+
+###### Sample Response
+
+<Row>
+  <Portion desktopSpan="whole">
+    <Tabs
+      tabs={[
+        {
+          key: "1",
+          label: <Badge type="success">SUCCESS</Badge>,
+          content: (
+            <>
+              <h5>Response</h5>
+              <CodeBlockWithCopy language="json">
+                {`{
+    "lastFetchedAt": "2024-11-21T07:48:16.404Z",
+    "dataRange": {
+        "from": "2022-01-01T00:00:00.000Z",
+        "to": "2024-06-01T00:00:00.000Z"
+    },
+    "lastFetchedFips": [
+        "setu-fip",
+        "setu-fip",
+        "setu-fip",
+        "setu-fip",
+        "setu-fip",
+        "setu-fip",
+        "setu-fip-2",
+        "setu-fip-2",
+        "setu-fip-2",
+        "setu-fip-2"
+    ],
+    "traceId": "1-673ee5c2-5e4e353d5d08c03372b26f6c"
+}`}
+              </CodeBlockWithCopy>
+            </>
+          ),
+        },
+        {
+          key: "2",
+          label: <Badge type="failure">FAIL - Wrong Product Instance ID</Badge>,
+          content: (
+            <>
+              <h5>Response</h5>
+              <CodeBlockWithCopy language="json">
+                {`{
+    "traceId": "1-673ee602-2e59a47b6fbdd39138066e6c",
+    "errorCode": "NotFound",
+    "errorMsg": "Config not found for provided product instance. Please check the product instance id"
+}`}
+              </CodeBlockWithCopy>
+            </>
+          ),
+        },
+        {
+          key: "3",
+          label: <Badge type="failure">FAIL - Consent not found</Badge>,
+          content: (
+            <>
+              <h5>Response</h5>
+              <CodeBlockWithCopy language="json">
+                {`{
+    "traceId": "1-673ee626-6e113df859cc8d1b4469957f",
+    "errorCode": "NotFound",
+    "errorMsg": "Consent not found"
+}`}
+              </CodeBlockWithCopy>
+            </>
+          ),
+        },
+        {
+          key: "4",
+          label: <Badge type="failure">FAIL - No Data Sessions Fetched yet</Badge>,
+          content: (
+            <>
+              <h5>Response</h5>
+              <CodeBlockWithCopy language="json">
+                {`{
+    "consentId": "4a2e2ba2-3285-4242-b05a-e4ccdd4679a1",
+    "dataSessions": [],
+    "traceId": "1-673ee63f-107b2a674068fc237a10d52c"
+}`}
+              </CodeBlockWithCopy>
+            </>
+          ),
+        },
+      ]}
+    />
+  </Portion>
+</Row>
+
+<hr class="primary" />
+
+### Get Data Sessions by Consent ID
+
+This API retrieves the list of all non-expired data sessions associated with a given consent ID. It provides details such as the session ID, current status, and the creation timestamp. Sessions are sorted in descending order of creation time.
+
+###### Request
+
+<table>
+  <tbody>
+    <tr>
+      <th>Base URL</th>
+      <td>
+        Sandbox: <code>https://fiu-sandbox.setu.co</code>
+        <br />
+        Production: <code>https://fiu.setu.co</code>
+      </td>
+    </tr>
+    <tr>
+      <th>Path</th>
+      <td>
+        <code>/v2/consents/:consent_id/data-sessions</code>
+      </td>
+    </tr>
+    <tr>
+      <th>Method</th>
+      <td>
+        <code>GET</code>
+      </td>
+    </tr>
+    <tr>
+      <th>Headers</th>
+      <td>
+        <code>Content-Type</code>: <code>application/json</code> <br />
+        <code>Authorization</code>: Bearer <code>access_token</code> <br />
+        <code>x-product-instance-id</code>: <code>product-instance-id</code> <br />
+        <code>Params</code>: <code>consent_request_id</code>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<br />
+
+<Callout type="tip">This is a GET API without any request body</Callout>
+
+<br />
+
+###### Sample Response
+
+<Row>
+  <Portion desktopSpan="whole">
+    <Tabs
+      tabs={[
+        {
+          key: "1",
+          label: <Badge type="success">SUCCESS</Badge>,
+          content: (
+            <>
+              <h5>Response</h5>
+              <CodeBlockWithCopy language="json">
+                {`{
+  "consentId": "e2304f07-6dae-4867-a0d7-8077cfbe2f87",
+  "dataSessions": [
+    {
+      "sessionId": "39faa19a-1f6a-4e10-85ad-2d5c6aa69257",
+      "status": "PENDING",
+      "created_at": "2024-12-17T12:14:26.537Z"
+    }
+  ],
+  "traceId": "064b8a84-accb-4303-9ddb-1447cb63b2b4"
+}`}
+              </CodeBlockWithCopy>
+            </>
+          ),
+        },
+        {
+          key: "2",
+          label: <Badge type="failure">FAIL - No Sessions Found</Badge>,
+          content: (
+            <>
+              <h5>Response</h5>
+              <CodeBlockWithCopy language="json">
+                {`{
+  "consentId": "e2304f07-6dae-4867-a0d7-8077cfbe2f879",
+  "dataSessions": [],
+  "traceId": "e26bed44-ecab-4b7a-af09-02069d9a9ced"
+}`}
+              </CodeBlockWithCopy>
+            </>
+          ),
+        }
+      ]}
+    />
+  </Portion>
+</Row>
+
+<WasPageHelpful />
