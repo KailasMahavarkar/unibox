@@ -124,7 +124,7 @@ function OverviewTab({ config }: { config: any }) {
 
       {/* Linked Accounts */}
       <div className="mx-4 mb-4">
-        <h2 className="text-xl font-bold mb-4">Linked accounts</h2>
+        {/* <h2 className="text-xl font-bold mb-4">Linked accounts</h2> */}
 
         <div className="flex gap-2 overflow-x-auto mb-4">
           <Badge variant="outline" className="bg-orange-500 text-white border-orange-500 rounded-full px-4">

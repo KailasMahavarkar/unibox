@@ -1,8 +1,9 @@
 export interface ChatMessage {
-  id: number;
+  id: string;
   text: string;
   isBot: boolean;
   timestamp: Date;
+  sessionId?: string;
 }
 
 export interface ChatbotApiRequest {
@@ -28,4 +29,24 @@ export interface ChatSession {
   created_at: Date;
   last_activity: Date;
   is_active: boolean;
+}
+export interface ChatHistory {
+  messages: ChatMessage[];
+  lastUpdated: Date;
+  sessionId: string;
+}
+
+export interface SharedChatState {
+  currentSession: ChatSession | null;
+  messageHistory: ChatMessage[];
+  isLoading: boolean;
+  error: string | null;
+  lastSyncTimestamp: number;
+}
+
+export interface ChatSyncEvent {
+  type: 'MESSAGE_ADDED' | 'MESSAGES_CLEARED' | 'SESSION_CHANGED' | 'STATE_UPDATED' | 'LOADING_STARTED' | 'LOADING_STOPPED' | 'ERROR_OCCURRED';
+  payload?: any;
+  timestamp: number;
+  source: string;
 }

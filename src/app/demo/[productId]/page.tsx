@@ -32,11 +32,11 @@ export default function DemoPage() {
   const [selectedAPISequence, setSelectedAPISequence] = useState<number | null>(null)
   const [config, setConfig] = useState({
     branding: {
-      primaryColor: "#f26522",
+      primaryColor: "#2663EB",
       secondaryColor: "#ffffff",
-      appName: "iFinance",
-      bankName: "ICICI Bank",
-      logo: "/icici-logo.png",
+      appName: "Setu PFM",
+      bankName: "Setu",
+      logo: "/setu-logo.png",
     },
     modules: {
       banking: true,
@@ -445,7 +445,7 @@ export default function DemoPage() {
     <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
       {/* Header */}
       <header className="bg-white border-b px-6 py-4 flex-shrink-0 shadow-sm">
-        <div className="flex items-center justify-between max-w-7xl mx-auto">
+        <div className="flex items-center justify-between mx-auto">
           <div className="flex items-center gap-6">
             <Link
               href="/products"
@@ -475,11 +475,11 @@ export default function DemoPage() {
             )}
             <Button variant="outline" size="sm" onClick={handleToggleAPIStructure} className="flex items-center gap-2">
               {showAPIStructure ? <Eye className="h-4 w-4" /> : <Code className="h-4 w-4" />}
-              {showAPIStructure ? "View UI" : "API Structure"}
+              {showAPIStructure ? "View UI" : "API Docs"}
             </Button>
             <Button onClick={handleScheduleCall} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700">
               <Calendar className="h-4 w-4" />
-              Schedule Call
+              Schedule a call
             </Button>
           </div>
         </div>
@@ -615,7 +615,6 @@ export default function DemoPage() {
                   className="flex items-center gap-2 px-3 sm:px-4"
                 >
                   <Smartphone className="h-4 w-4" />
-                  <span className="hidden sm:inline">Mobile</span>
                 </Button>
                 <Button
                   variant={viewportSize === "tablet" ? "default" : "ghost"}
@@ -624,7 +623,6 @@ export default function DemoPage() {
                   className="flex items-center gap-2 px-3 sm:px-4"
                 >
                   <Tablet className="h-4 w-4" />
-                  <span className="hidden sm:inline">Tablet</span>
                 </Button>
                 <Button
                   variant={viewportSize === "desktop" ? "default" : "ghost"}
@@ -633,7 +631,6 @@ export default function DemoPage() {
                   className="flex items-center gap-2 px-3 sm:px-4"
                 >
                   <Monitor className="h-4 w-4" />
-                  <span className="hidden sm:inline">Desktop</span>
                 </Button>
               </div>
 
@@ -651,7 +648,6 @@ export default function DemoPage() {
                 <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
                   <Settings className="h-8 w-8 text-blue-600" />
                 </div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">Start Configuring</h2>
                 <p className="text-gray-600 mb-8 leading-relaxed">
                   Use the configuration panel on the left to customize your Personal Finance Management interface.
                 </p>

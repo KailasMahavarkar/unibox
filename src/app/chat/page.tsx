@@ -1,122 +1,59 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ArrowLeft, Send, Sparkles, Copy, Download, AlertCircle, RefreshCw } from "lucide-react"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
-import { chatbotService } from "@/services/api/chatbot-service"
 import { Badge } from "@/components/ui/badge"
+import { useSharedChat } from "@/hooks/use-shared-chat"
+import Markdown from 'marked-react';
 
 export default function ChatPage() {
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      text: "Hello! I'm your AI assistant for Setu's PFM API Suite. I have comprehensive knowledge of all APIs and can help with integration details, authentication flows, and technical implementation. What would you like to know?",
-      isBot: true,
-      timestamp: new Date(),
-    },
-  ])
   const [inputValue, setInputValue] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [sessionId, setSessionId] = useState<string | null>(null)
   const { toast } = useToast()
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  
+  const {
+    messages,
+    session,
+    isLoading,
+    error,
+    sendMessage,
+    startNewSession,
+    exportHistory,
+    triggerScroll
+  } = useSharedChat()
 
-  // Update session ID on component mount and when session changes
+  // Auto-scroll to bottom when messages change or loading state changes
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [])
+
+  // Register scroll callback with shared chat hook
   useEffect(() => {
-    const updateSessionId = () => {
-      try {
-        const session = chatbotService.getSessionInfo();
-        setSessionId(session?.session_id || null);
-      } catch (error) {
-        console.warn('Failed to get session info:', error);
-        setSessionId(null);
-      }
-    };
+    triggerScroll(scrollToBottom)
+  }, [triggerScroll, scrollToBottom])
 
-    updateSessionId();
-    // Update session ID periodically
-    const interval = setInterval(updateSessionId, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const startNewSession = () => {
-    try {
-      const newSession = chatbotService.startNewSession();
-      setSessionId(newSession.session_id);
-      setMessages([
-        {
-          id: 1,
-          text: "New session started! Hello! I'm your AI assistant for Setu's PFM API Suite. I have comprehensive knowledge of all APIs and can help with integration details, authentication flows, and technical implementation. What would you like to know?",
-          isBot: true,
-          timestamp: new Date(),
-        },
-      ]);
-      toast({
-        title: "New Session Started",
-        description: `Session ${newSession.session_id.split('_')[1]} created successfully`,
-      });
-    } catch (error) {
-      console.error('Failed to start new session:', error);
-      toast({
-        title: "Error",
-        description: "Failed to start new session",
-        variant: "destructive",
-      });
-    }
-  };
+  // Also trigger scroll on messages/loading changes (backup)
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages, isLoading, scrollToBottom])
 
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isLoading) return
 
-    const newMessage = {
-      id: messages.length + 1,
-      text: inputValue,
-      isBot: false,
-      timestamp: new Date(),
-    }
-
-    setMessages(prev => [...prev, newMessage])
+    await sendMessage(inputValue)
     setInputValue("")
-    setIsLoading(true)
-    setError(null)
+  }
 
-    try {
-      // Call the real AWS PFM API with session management
-      const botResponse = await chatbotService.sendMessage(inputValue)
-      
-      // Update session ID after successful message
-      const session = chatbotService.getSessionInfo();
-      if (session) {
-        setSessionId(session.session_id);
-      }
-      
-      const response = {
-        id: messages.length + 2,
-        text: botResponse,
-        isBot: true,
-        timestamp: new Date(),
-      }
-      
-      setMessages(prev => [...prev, response])
-    } catch (error) {
-      console.error('Chatbot API error:', error)
-      setError(error instanceof Error ? error.message : 'Failed to get response')
-      
-      // Add error message to chat
-      const errorResponse = {
-        id: messages.length + 2,
-        text: `I'm sorry, I encountered an error: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`,
-        isBot: true,
-        timestamp: new Date(),
-      }
-      
-      setMessages(prev => [...prev, errorResponse])
-    } finally {
-      setIsLoading(false)
-    }
+  const handleNewSession = () => {
+    startNewSession()
+    toast({
+      title: "New Session Started",
+      description: `Session ${session?.session_id.split('_')[1]} created successfully`,
+    })
   }
 
   const copyMessage = (text: string) => {
@@ -127,18 +64,12 @@ export default function ChatPage() {
     })
   }
 
-  const exportChat = () => {
-    const chatText = messages
-      .map((msg) => `${msg.isBot ? "AI" : "You"} (${msg.timestamp.toLocaleTimeString()}): ${msg.text}`)
-      .join("\n\n")
-
-    const blob = new Blob([chatText], { type: "text/plain" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = "setu-pfm-api-chat.txt"
-    a.click()
-    URL.revokeObjectURL(url)
+  const handleExportChat = () => {
+    exportHistory()
+    toast({
+      title: "Chat Exported",
+      description: "Chat history downloaded successfully",
+    })
   }
 
   return (
@@ -160,12 +91,12 @@ export default function ChatPage() {
                 <Sparkles className="h-5 w-5 text-blue-600" />
               </div>
               <div>
-                <h1 className="text-xl font-semibold text-gray-900">PFM API Assistant</h1>
+                <h1 className="text-xl font-semibold text-gray-900">Setu AI</h1>
+                <p className="text-md text-gray-600">Ask me anything!</p>
                 <div className="flex items-center gap-2">
-                  <p className="text-sm text-gray-500">Expert knowledge powered by AWS</p>
-                  {sessionId && (
+                  {session && (
                     <Badge variant="outline" className="text-xs">
-                      Session: {sessionId.split('_')[1]}
+                      Session: {session.session_id.split('_')[1]}
                     </Badge>
                   )}
                 </div>
@@ -175,7 +106,7 @@ export default function ChatPage() {
 
           <div className="flex items-center gap-2">
             <Button 
-              onClick={startNewSession} 
+              onClick={handleNewSession} 
               variant="outline" 
               size="sm"
               className="flex items-center gap-2"
@@ -183,7 +114,7 @@ export default function ChatPage() {
               <RefreshCw className="h-4 w-4" />
               New Session
             </Button>
-            <Button onClick={exportChat} variant="outline" className="flex items-center gap-2">
+            <Button onClick={handleExportChat} variant="outline" className="flex items-center gap-2">
               <Download className="h-4 w-4" />
               Export Chat
             </Button>
@@ -203,7 +134,9 @@ export default function ChatPage() {
                     message.isBot ? "bg-white border border-gray-200 text-gray-800" : "bg-blue-600 text-white"
                   }`}
                 >
-                  <div className="whitespace-pre-wrap text-sm leading-relaxed">{message.text}</div>
+                  <div className="whitespace-pre-wrap text-sm leading-relaxed">
+                    <Markdown>{message.text}</Markdown>
+                  </div>
                   <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-200 border-opacity-20">
                     <span className={`text-xs ${message.isBot ? "text-gray-500" : "text-blue-100"}`}>
                       {message.timestamp.toLocaleTimeString()}
@@ -255,6 +188,9 @@ export default function ChatPage() {
               </div>
             </div>
           )}
+
+          {/* Scroll target */}
+          <div ref={messagesEndRef} />
         </div>
 
         {/* Input */}
